@@ -1,0 +1,2 @@
+input "data/sample.jsonl";
+print line 1;

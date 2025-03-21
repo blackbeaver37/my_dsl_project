@@ -1,0 +1,9 @@
+[package]
+name = "my_dsl_project"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] } # 순서 유지 옵션
+indexmap = "2.0"
