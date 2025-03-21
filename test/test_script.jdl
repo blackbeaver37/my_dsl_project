@@ -1,2 +1,10 @@
 input "data/sample.jsonl";
-print line 1;
+output "data/updated.jsonl";
+
+update {
+    data_id = @문항번호;
+    data_title = @초중등여부 + "_" + @교과과정 + "_" + @과목;
+    content = @문제;
+}
+
+print line 10;
