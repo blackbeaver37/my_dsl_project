@@ -1,7 +1,7 @@
 //! ✅ DSL용 Lexer
 //!
 //! 이 모듈은 사용자 정의 DSL 스크립트를 의미 있는 Token으로 분해하는 역할을 한다.
-//! 예: input/output/update/print 등의 키워드, 문자열, 식별자, 연산자 등을 인식한다.
+//! 예: input/output/transform/print 등의 키워드, 문자열, 식별자, 연산자 등을 인식한다.
 
 use std::iter::Peekable;
 use std::str::Chars;
@@ -12,7 +12,7 @@ pub enum Token {
     // 키워드들
     Input,                  // `input` 명령어
     Output,                 // `output` 명령어
-    Update,                 // `update` 명령어
+    Transform,                 // `transform` 명령어
     Print,                  // `print` 명령어
 
     // 값 또는 참조
@@ -26,8 +26,8 @@ pub enum Token {
     Plus,                   // `+` (문자열 연결 연산자)
     Equal,                  // `=` (대입 연산자)
     Semicolon,              // `;` (명령어 구분)
-    LeftBrace,              // `{` (update 블록 시작)
-    RightBrace,             // `}` (update 블록 종료)
+    LeftBrace,              // `{` (블록 시작)
+    RightBrace,             // `}` (블록 종료)
 
     // 예외 및 종료
     Unknown(char),          // 정의되지 않은 문자
@@ -54,7 +54,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// 🔹 다음 문자를 미리 보기 (소비하지 않음)
-    fn peek_char(&self) -> Option<&char> {
+    fn peek_char(&mut self) -> Option<&char> {
         self.input.peek()
     }
 
@@ -104,7 +104,7 @@ impl<'a> Lexer<'a> {
             // 키워드 우선 처리
             "input" => Token::Input,
             "output" => Token::Output,
-            "update" => Token::Update,
+            "transform" => Token::Transform,
             "print" => Token::Print,
             _ => {
                 // 숫자 리터럴 판별

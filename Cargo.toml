@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["preserve_order"] } # 순서 유지 옵션
-indexmap = "2.0"
+serde_json = "1.0"
+indexmap = { version = "2.1", features = ["serde"] }

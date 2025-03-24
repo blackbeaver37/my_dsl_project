@@ -8,7 +8,7 @@
 //! - output "파일명";
 //! - print;
 //! - print line 1;
-//! - update { 필드 = 표현식; ... }
+//! - transform { 필드 = 표현식; ... }
 
 use crate::lexer::Token;
 
@@ -17,7 +17,7 @@ use crate::lexer::Token;
 // ==========================================================
 
 /// 표현식(Expression) 구조
-/// update 구문의 우측 값에 해당
+/// transform 구문의 우측 값에 해당
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Field(String),              // 예: @문제
@@ -32,7 +32,7 @@ pub enum Command {
     Output(String),                     // output "파일";
     Print,                              // print;
     PrintLine(usize),                   // print line 1;
-    Update(Vec<(String, Expression)>),  // update { key = expr; ... }
+    Transform(Vec<(String, Expression)>),  // transform { key = expr; ... }
 }
 
 // ==========================================================
@@ -85,7 +85,7 @@ impl Parser {
                 Token::Input => self.parse_input()?,
                 Token::Output => self.parse_output()?,
                 Token::Print => self.parse_print()?,
-                Token::Update => self.parse_update()?,
+                Token::Transform => self.parse_transform()?,
                 other => return Err(format!("Unexpected token in command position: {:?}", other)),
             };
 
@@ -151,12 +151,12 @@ impl Parser {
         }
     }
 
-    /// update { key = expr; ... }
-    fn parse_update(&mut self) -> Result<Command, String> {
-        self.advance(); // update
+    /// transform { key = expr; ... }
+    fn parse_transform(&mut self) -> Result<Command, String> {
+        self.advance(); // transform
         self.expect(&Token::LeftBrace)?; // {
 
-        let mut updates = Vec::new();
+        let mut transforms = Vec::new();
 
         while let Some(token) = self.current_token() {
             match token {
@@ -170,15 +170,15 @@ impl Parser {
                     self.expect(&Token::Equal)?;
                     let expr = self.parse_expression()?;
                     self.expect(&Token::Semicolon)?;
-                    updates.push((key, expr));
+                    transforms.push((key, expr));
                 }
                 other => {
-                    return Err(format!("Unexpected token inside update block: {:?}", other));
+                    return Err(format!("Unexpected token inside transform block: {:?}", other));
                 }
             }
         }
 
-        Ok(Command::Update(updates))
+        Ok(Command::Transform(transforms))
     }
 
     /// 표현식 파싱

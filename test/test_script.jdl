@@ -1,7 +1,7 @@
 input "data/sample.jsonl";
 output "data/updated.jsonl";
 
-update {
+transform {
     data_id = @문항번호;
     data_title = @초중등여부 + "_" + @교과과정 + "_" + @과목;
     content = @문제;

@@ -1,41 +1,59 @@
 mod lexer;
 mod parser;
+mod interpreter;
+mod evaluator; // ✅ evaluator 모듈 포함
 
 use lexer::Lexer;
-use parser::{Parser, Command, Expression};
+use parser::{Parser, Command};
+use interpreter::Interpreter;
 
 use std::fs;
 
 fn main() {
-    // ✅ 1. DSL 스크립트 읽기
-    let source = fs::read_to_string("test/test_script.jdl")
-        .expect("❌ JDL 스크립트 파일을 읽을 수 없습니다.");
+    // ✅ 1. 테스트용 DSL 코드 읽기
+    let source_path = "test/test_script.jdl";
 
-    println!("📜 🔹 원본 DSL 스크립트:\n{}\n", source.trim());
+    let source = fs::read_to_string(source_path)
+        .unwrap_or_else(|e| {
+            eprintln!("❌ Failed to read DSL file '{}': {}", source_path, e);
+            std::process::exit(1);
+        });
 
-    // ✅ 2. Lexer: 토큰화
+    println!("🔹 DSL Script Loaded From '{}':\n", source_path);
+    println!("{}", source);
+    println!();
+
+    // ✅ 2. 렉서 실행 (토큰화)
     let mut lexer = Lexer::new(&source);
     let tokens = lexer.tokenize();
 
-    println!("🧱 🔹 생성된 토큰 리스트:");
+    println!("🔹 Tokens:");
     for (i, token) in tokens.iter().enumerate() {
         println!("  [{:02}] {:?}", i, token);
     }
     println!();
 
-    // ✅ 3. Parser: AST(Command 리스트) 생성
+    // ✅ 3. 파서 실행 (AST 생성)
     let mut parser = Parser::new(tokens);
     let commands = match parser.parse() {
         Ok(cmds) => cmds,
         Err(e) => {
-            eprintln!("❌ 파싱 에러 발생: {}", e);
-            return;
+            eprintln!("❌ Parser error: {}", e);
+            std::process::exit(1);
         }
     };
 
-    println!("🧠 🔹 파싱된 명령어(Command) 리스트:");
-    for (i, command) in commands.iter().enumerate() {
-        println!("  [{:02}] {:?}", i, command);
+    println!("🔹 Parsed Commands:");
+    for (i, cmd) in commands.iter().enumerate() {
+        println!("  [{:02}] {:?}", i, cmd);
     }
     println!();
+
+    // ✅ 4. 인터프리터 실행 (명령어 실행)
+    println!("🔹 Interpreter Output:");
+    let mut interpreter = Interpreter::new();
+    if let Err(e) = interpreter.run(commands) {
+        eprintln!("❌ Runtime error: {}", e);
+        std::process::exit(1);
+    }
 }
