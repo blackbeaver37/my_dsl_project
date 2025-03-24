@@ -16,55 +16,62 @@ use crate::lexer::Token;
 // ✅ 표현식(Expression)과 명령어(Command) 구조 정의
 // ==========================================================
 
+/// 필드 후처리 기능에 대한 Modifier 정의
+#[derive(Debug, Clone, PartialEq)]
+pub enum FieldModifier {
+    Suffix(String),
+    Prefix(String),
+    Default(String),
+}
+
+/// 후처리 가능한 필드 구조체
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldWithModifiers {
+    pub name: String,
+    pub modifiers: Vec<FieldModifier>, // 여러 modifier 지원
+}
+
 /// 표현식(Expression) 구조
-/// transform 구문의 우측 값에 해당
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
-    Field(String),              // 예: @문제
-    Literal(String),            // 예: "내용"
-    Concat(Vec<Expression>),    // 예: @과목 + "_" + @학년
+    Field(String),
+    FieldWithModifiers(FieldWithModifiers), // 구조체로 분리
+    Literal(String),
+    Concat(Vec<Expression>),
 }
 
 /// DSL 명령어(Command) 구조
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
-    Input(String),                      // input "파일";
-    Output(String),                     // output "파일";
-    Print,                              // print;
-    PrintLine(usize),                   // print line 1;
-    Transform(Vec<(String, Expression)>),  // transform { key = expr; ... }
+    Input(String),
+    Output(String),
+    Print,
+    PrintLine(usize),
+    Transform(Vec<(String, Expression)>),
 }
 
 // ==========================================================
 // ✅ Parser 구조체 정의
 // ==========================================================
 
-/// DSL 파서: 토큰 벡터를 받아 명령어(Command) 리스트로 변환
 pub struct Parser {
-    tokens: Vec<Token>,  // 토큰 벡터
-    position: usize,     // 현재 파싱 위치 인덱스
+    tokens: Vec<Token>,
+    position: usize,
 }
 
 impl Parser {
-    /// Parser 생성자
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self {
-            tokens,
-            position: 0,
-        }
+        Self { tokens, position: 0 }
     }
 
-    /// 현재 위치의 토큰 반환
     fn current_token(&self) -> Option<&Token> {
         self.tokens.get(self.position)
     }
 
-    /// 다음 토큰으로 이동
     fn advance(&mut self) {
         self.position += 1;
     }
 
-    /// 예상 토큰이 맞는지 확인하고 advance
     fn expect(&mut self, expected: &Token) -> Result<(), String> {
         match self.current_token() {
             Some(token) if token == expected => {
@@ -76,7 +83,6 @@ impl Parser {
         }
     }
 
-    /// 전체 명령어 파싱 시작
     pub fn parse(&mut self) -> Result<Vec<Command>, String> {
         let mut commands = Vec::new();
 
@@ -88,17 +94,14 @@ impl Parser {
                 Token::Transform => self.parse_transform()?,
                 other => return Err(format!("Unexpected token in command position: {:?}", other)),
             };
-
             commands.push(command);
         }
 
         Ok(commands)
     }
 
-    /// input "파일";
     fn parse_input(&mut self) -> Result<Command, String> {
-        self.advance(); // input
-
+        self.advance();
         match self.current_token() {
             Some(Token::StringLiteral(path)) => {
                 let path = path.clone();
@@ -110,10 +113,8 @@ impl Parser {
         }
     }
 
-    /// output "파일";
     fn parse_output(&mut self) -> Result<Command, String> {
-        self.advance(); // output
-
+        self.advance();
         match self.current_token() {
             Some(Token::StringLiteral(path)) => {
                 let path = path.clone();
@@ -125,10 +126,8 @@ impl Parser {
         }
     }
 
-    /// print; 또는 print line N;
     fn parse_print(&mut self) -> Result<Command, String> {
-        self.advance(); // print
-
+        self.advance();
         match self.current_token() {
             Some(Token::Semicolon) => {
                 self.advance();
@@ -136,7 +135,6 @@ impl Parser {
             }
             Some(Token::Identifier(id)) if id == "line" => {
                 self.advance();
-
                 match self.current_token() {
                     Some(Token::Number(n)) => {
                         let line_num = *n;
@@ -151,17 +149,16 @@ impl Parser {
         }
     }
 
-    /// transform { key = expr; ... }
     fn parse_transform(&mut self) -> Result<Command, String> {
-        self.advance(); // transform
-        self.expect(&Token::LeftBrace)?; // {
+        self.advance();
+        self.expect(&Token::LBrace)?;
 
         let mut transforms = Vec::new();
 
         while let Some(token) = self.current_token() {
             match token {
-                Token::RightBrace => {
-                    self.advance(); // }
+                Token::RBrace => {
+                    self.advance();
                     break;
                 }
                 Token::Identifier(key) => {
@@ -181,8 +178,66 @@ impl Parser {
         Ok(Command::Transform(transforms))
     }
 
-    /// 표현식 파싱
-    /// 예: @필드, "문자열", @필드 + "_" + @필드
+    /// 🔹 필드 또는 수정자를 포함한 필드를 파싱하는 함수
+    fn parse_field_with_modifiers(&mut self, name: String) -> Expression {
+        let mut modifiers = Vec::new();
+    
+        // 반복적으로 .modifier("값") 형태를 파싱
+        while let Some(Token::Dot) = self.current_token() {
+            self.advance(); // consume '.'
+    
+            let modifier_name = match self.current_token() {
+                Some(Token::Identifier(name)) => {
+                    let name = name.clone();
+                    self.advance();
+                    name
+                }
+                other => break, // 잘못된 토큰이면 종료
+            };
+    
+            // 괄호 시작
+            if let Err(_) = self.expect(&Token::LParen) {
+                break;
+            }
+    
+            // 문자열 리터럴 값 가져오기
+            let value = match self.current_token() {
+                Some(Token::StringLiteral(s)) => {
+                    let s = s.clone();
+                    self.advance();
+                    s
+                }
+                _ => break,
+            };
+    
+            // 괄호 닫기
+            if let Err(_) = self.expect(&Token::RParen) {
+                break;
+            }
+    
+            // Modifier enum에 추가
+            let modifier = match modifier_name.as_str() {
+                "prefix" => FieldModifier::Prefix(value),
+                "suffix" => FieldModifier::Suffix(value),
+                "default" => FieldModifier::Default(value),
+                _ => break, // 알 수 없는 modifier
+            };
+    
+            modifiers.push(modifier);
+        }
+    
+        if modifiers.is_empty() {
+            Expression::Field(name)
+        } else {
+            Expression::FieldWithModifiers(FieldWithModifiers {
+                name,
+                modifiers,
+            })
+        }
+    }
+    
+
+    /// 🔹 문자열, 필드, 연결 표현식을 파싱하는 함수
     fn parse_expression(&mut self) -> Result<Expression, String> {
         let mut parts = Vec::new();
 
@@ -191,7 +246,7 @@ impl Parser {
                 Some(Token::Field(name)) => {
                     let name = name.clone();
                     self.advance();
-                    Expression::Field(name)
+                    self.parse_field_with_modifiers(name)
                 }
                 Some(Token::StringLiteral(s)) => {
                     let s = s.clone();
@@ -203,12 +258,11 @@ impl Parser {
 
             parts.push(expr);
 
-            // + 연산이 있는 경우 → Concat 계속 진행
             match self.current_token() {
                 Some(Token::Plus) => {
-                    self.advance(); // + 소비
+                    self.advance();
                 }
-                _ => break, // 종료
+                _ => break,
             }
         }
 

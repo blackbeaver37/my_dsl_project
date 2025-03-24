@@ -3,8 +3,10 @@ output "data/updated.jsonl";
 
 transform {
     data_id = @문항번호;
-    data_title = @초중등여부 + "_" + @교과과정 + "_" + @과목;
-    content = @문제;
+    data_source = "아이스크림에듀";
+    data_type = "Text";
+    data_title = @초중등여부.prefix("> ").suffix("_") + @교과과정.suffix("_") + @과목;
+    content = @문제.prefix("문제: ").suffix("\n").default("없음") + @정답.prefix("정답: ").default("없음");
 }
 
-print line 10;
+print line 1;

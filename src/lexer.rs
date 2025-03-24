@@ -10,29 +10,30 @@ use std::str::Chars;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // 키워드들
-    Input,                  // `input` 명령어
-    Output,                 // `output` 명령어
-    Transform,                 // `transform` 명령어
-    Print,                  // `print` 명령어
+    Input, Output, Transform, Print,
 
     // 값 또는 참조
-    StringLiteral(String),  // 문자열 (예: "sample.jsonl")
-    Identifier(String),     // 일반 식별자 (예: line, data_title 등)
-    Field(String),          // @필드명 (예: @문제, @과목)
+    StringLiteral(String),      // 예: "sample.jsonl"
+    Identifier(String),         // 예: line, suffix 등
+    Field(String),              // 예: @문제
 
-    Number(usize),          // 숫자 리터럴 (예: 1, 42 등)
+    Number(usize),              // 예: 42
 
     // 연산자 및 구분자
-    Plus,                   // `+` (문자열 연결 연산자)
-    Equal,                  // `=` (대입 연산자)
-    Semicolon,              // `;` (명령어 구분)
-    LeftBrace,              // `{` (블록 시작)
-    RightBrace,             // `}` (블록 종료)
+    Plus,                       // +
+    Equal,                      // =
+    Semicolon,                  // ;
+    LBrace,                  // {
+    RBrace,                 // }
+    Dot,                        // . (함수 호출 구분자)
+    LParen,                     // ( (함수 호출 시작)
+    RParen,                     // ) (함수 호출 종료)
 
     // 예외 및 종료
-    Unknown(char),          // 정의되지 않은 문자
-    EOF,                    // 입력 종료
+    Unknown(char),              // 정의되지 않은 문자
+    EOF,                        // 입력 종료
 }
+
 
 /// ✅ Lexer 구조체
 /// 입력 문자열을 한 글자씩 순회하며 Token을 생성함
@@ -126,14 +127,17 @@ impl<'a> Lexer<'a> {
                 '+' => return Token::Plus,
                 '=' => return Token::Equal,
                 ';' => return Token::Semicolon,
-                '{' => return Token::LeftBrace,
-                '}' => return Token::RightBrace,
-
+                '{' => return Token::LBrace,
+                '}' => return Token::RBrace,
+                '.' => return Token::Dot,
+                '(' => return Token::LParen,
+                ')' => return Token::RParen,
+            
                 c if c.is_whitespace() => continue,
                 c if c.is_alphanumeric() => return self.read_identifier_or_number(c),
-
+            
                 other => return Token::Unknown(other),
-            }
+            }            
         }
 
         Token::EOF
