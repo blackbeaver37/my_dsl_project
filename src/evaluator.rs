@@ -5,6 +5,7 @@
 //! - 확장 표현식: @필드.suffix("_").default("기본값")
 
 use crate::parser::{Expression, FieldWithModifiers, FieldModifier};
+use crate::utils::unescape_string;
 use indexmap::IndexMap;
 use serde_json::Value;
 
@@ -23,7 +24,7 @@ pub fn evaluate_expression(
 ) -> Result<String, String> {
     match expr {
         // 📌 문자열 리터럴은 그대로 반환
-        Expression::Literal(s) => Ok(s.clone()),
+        Expression::Literal(s) => Ok(unescape_string(s)),
 
         // 📌 일반 필드 (@필드)
         Expression::Field(name) => {
@@ -77,7 +78,7 @@ fn evaluate_field_with_modifiers(
     for modifier in &field.modifiers {
         if let FieldModifier::Default(default_str) = modifier {
             if raw_value.is_none() || raw_value.as_deref() == Some("") {
-                raw_value = Some(default_str.clone());
+                raw_value = Some(unescape_string(default_str));
             }
         }
     }
@@ -96,10 +97,10 @@ fn evaluate_field_with_modifiers(
     for modifier in &field.modifiers {
         match modifier {
             FieldModifier::Prefix(pre) => {
-                value = format!("{}{}", pre, value);
+                value = format!("{}{}", unescape_string(pre), value);
             }
             FieldModifier::Suffix(suf) => {
-                value = format!("{}{}", value, suf);
+                value = format!("{}{}", value, unescape_string(suf));
             }
             FieldModifier::Default(_) => {
                 // default는 앞에서 이미 처리됨

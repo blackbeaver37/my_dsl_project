@@ -1,7 +1,8 @@
 mod lexer;
 mod parser;
+mod evaluator;
 mod interpreter;
-mod evaluator; // ✅ evaluator 모듈 포함
+mod utils;
 
 use lexer::Lexer;
 use parser::{Parser, Command};
@@ -18,7 +19,7 @@ fn main() {
             eprintln!("❌ Failed to read DSL file '{}': {}", source_path, e);
             std::process::exit(1);
         });
-        
+
     println!("🔹 DSL Script Loaded From '{}':\n", source_path);
     println!("{}", source);
     println!();
