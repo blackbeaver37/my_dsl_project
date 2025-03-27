@@ -7,6 +7,7 @@ transform {
     data_type = "Text";
     data_title = @초중등여부.prefix("> ").suffix("_") + @교과과정.suffix("_") + @과목;
     content = @문제.prefix("문제: ").suffix("\n").default("없음") + @정답.prefix("정답: ").default("없음");
+    add_info = raw();
 }
 
 print line 1;

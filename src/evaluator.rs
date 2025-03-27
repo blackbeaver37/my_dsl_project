@@ -1,80 +1,84 @@
 //! ✅ evaluator.rs
 //!
-//! 이 모듈은 transform 명령어의 우변에 등장하는 Expression을 실제 문자열 값으로 변환하는 역할을 한다.
-//! - 기본 표현식: @필드명, "문자열", @필드 + "_" + @필드
-//! - 확장 표현식: @필드.suffix("_").default("기본값")
+//! 이 모듈은 transform 명령어의 우변에 등장하는 Expression을 실제 JSON 값으로 평가한다.
+//! - 문자열 기반 표현식은 Value::String("...") 형태로 반환
+//! - raw()는 JSON 객체 그대로 Value::Object(...)로 반환
 
 use crate::parser::{Expression, FieldWithModifiers, FieldModifier};
 use crate::utils::unescape_string;
 use indexmap::IndexMap;
-use serde_json::Value;
+use serde_json::{Value, Map};
 
-/// 🔍 표현식을 평가하여 문자열로 변환
+/// 🔍 표현식을 평가하여 JSON 값(Value)으로 변환
 ///
 /// # 인자
-/// - `expr`: 평가할 Expression (Field, Literal, Concat 등)
+/// - `expr`: 평가할 Expression
 /// - `record`: 현재 처리 중인 한 줄의 JSONL 데이터
 ///
 /// # 반환
-/// - Ok(String): 변환된 문자열
+/// - Ok(Value): 평가 결과 (문자열 또는 객체)
 /// - Err(String): 에러 메시지
 pub fn evaluate_expression(
     expr: &Expression,
     record: &IndexMap<String, Value>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     match expr {
-        // 📌 문자열 리터럴은 그대로 반환
-        Expression::Literal(s) => Ok(unescape_string(s)),
+        // 📌 문자열 리터럴
+        Expression::Literal(s) => Ok(Value::String(unescape_string(s))),
 
         // 📌 일반 필드 (@필드)
         Expression::Field(name) => {
-            evaluate_field_with_modifiers(
+            let value = evaluate_field_with_modifiers(
                 &FieldWithModifiers {
                     name: name.clone(),
                     modifiers: vec![],
                 },
                 record,
-            )
+            )?;
+            Ok(Value::String(value))
         }
 
-        // 📌 확장 필드 (@필드.suffix(...).default(...) 등)
+        // 📌 확장 필드 (@필드.suffix(...) 등)
         Expression::FieldWithModifiers(field_struct) => {
-            evaluate_field_with_modifiers(field_struct, record)
+            let value = evaluate_field_with_modifiers(field_struct, record)?;
+            Ok(Value::String(value))
         }
 
-        // 📌 여러 표현식을 +로 연결한 경우 (예: @과목 + "_" + @학년)
+        // 📌 여러 표현식을 +로 연결 (문자열 연결)
         Expression::Concat(parts) => {
             let mut result = String::new();
             for part in parts {
-                let v = evaluate_expression(part, record)?; // 하위 표현식 재귀적으로 평가
-                result.push_str(&v);
+                let v = evaluate_expression(part, record)?;
+                let s = v.as_str().unwrap_or("").to_string();
+                result.push_str(&s);
             }
-            Ok(result)
+            Ok(Value::String(result))
+        }
+
+        // ✅ raw() → 전체 레코드 반환
+        Expression::RawRecord => {
+            let map: Map<String, Value> = record.clone().into_iter().collect(); // 🔹 변환
+            Ok(Value::Object(map))
         }
     }
 }
 
 /// 🔍 확장 필드(FieldWithModifiers) 평가
 ///
-/// - 필드가 존재하지 않거나 값이 비어 있을 경우 default 처리
-/// - 값이 존재하면 prefix, suffix 순서대로 modifier를 적용
-///
-/// # modifier 처리 순서
-/// 1. Default: 값이 없을 경우 기본값으로 대체
-/// 2. Prefix: 앞에 문자열 추가
-/// 3. Suffix: 뒤에 문자열 추가
+/// - 필드가 없거나 비어 있으면 default 처리
+/// - 값이 존재하면 prefix/suffix 적용
 fn evaluate_field_with_modifiers(
     field: &FieldWithModifiers,
     record: &IndexMap<String, Value>,
 ) -> Result<String, String> {
-    // 🔸 필드의 원본 값 가져오기
+    // 🔸 원본 필드 값 가져오기
     let mut raw_value: Option<String> = match record.get(&field.name) {
         Some(Value::String(s)) => Some(s.clone()),
-        Some(other) => Some(other.to_string()), // 숫자나 불리언도 문자열로 변환
+        Some(other) => Some(other.to_string()),
         None => None,
     };
 
-    // 🔸 default() modifier 우선 적용
+    // 🔸 default 우선 적용
     for modifier in &field.modifiers {
         if let FieldModifier::Default(default_str) = modifier {
             if raw_value.is_none() || raw_value.as_deref() == Some("") {
@@ -83,17 +87,16 @@ fn evaluate_field_with_modifiers(
         }
     }
 
-    // 🔸 값이 없는 경우 빈 문자열 반환 (에러는 아님)
+    // 🔸 값이 없으면 빈 문자열 반환
     let Some(mut value) = raw_value else {
         return Ok(String::new());
     };
 
-    // 🔸 빈 문자열이면 prefix/suffix 적용하지 않음
     if value.is_empty() {
         return Ok(String::new());
     }
 
-    // 🔸 prefix → suffix 순서로 modifier 적용
+    // 🔸 prefix → suffix 순서로 적용
     for modifier in &field.modifiers {
         match modifier {
             FieldModifier::Prefix(pre) => {
@@ -102,9 +105,7 @@ fn evaluate_field_with_modifiers(
             FieldModifier::Suffix(suf) => {
                 value = format!("{}{}", value, unescape_string(suf));
             }
-            FieldModifier::Default(_) => {
-                // default는 앞에서 이미 처리됨
-            }
+            FieldModifier::Default(_) => {}
         }
     }
 

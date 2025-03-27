@@ -10,10 +10,10 @@ use indexmap::IndexMap;
 /// ✅ Interpreter 구조체
 /// - DSL 명령어(Command)를 해석하고 실행
 pub struct Interpreter {
-    input_file_path: Option<String>,           // 입력 파일 경로
-    output_file_path: Option<String>,          // 출력 파일 경로
-    jsonl_data: Vec<IndexMap<String, Value>>,  // 입력에서 읽은 JSON 데이터
-    transformed_data: Vec<IndexMap<String, Value>>, // transform 결과 데이터 (새로운 구조로 덮어쓰기)
+    input_file_path: Option<String>,                 // 입력 파일 경로
+    output_file_path: Option<String>,                // 출력 파일 경로
+    jsonl_data: Vec<IndexMap<String, Value>>,        // 입력 JSONL 데이터
+    transformed_data: Vec<IndexMap<String, Value>>,  // transform 결과 데이터
 }
 
 impl Interpreter {
@@ -60,7 +60,7 @@ impl Interpreter {
                 }
 
                 // 📌 transform { ... }
-                // - 입력 데이터를 기반으로 완전히 새로운 구조 생성
+                // - 입력 데이터를 기반으로 새로운 구조로 재구성
                 Command::Transform(assignments) => {
                     self.transformed_data.clear(); // 이전 transform 결과 초기화
 
@@ -68,8 +68,8 @@ impl Interpreter {
                         let mut new_record = IndexMap::new();
 
                         for (field_name, expr) in &assignments {
-                            let value = evaluate_expression(expr, original)?; // evaluator로 표현식 평가
-                            new_record.insert(field_name.clone(), Value::String(value));
+                            let value = evaluate_expression(expr, original)?; // 문자열 또는 객체
+                            new_record.insert(field_name.clone(), value);
                         }
 
                         self.transformed_data.push(new_record);
@@ -78,9 +78,8 @@ impl Interpreter {
             }
         }
 
-        // 🔹 output 경로가 지정되어 있으면 결과 저장
+        // 🔹 결과 저장
         if let Some(path) = &self.output_file_path {
-            // 📌 transform이 수행되었으면 그 결과 저장, 그렇지 않으면 원본 유지
             let data = if !self.transformed_data.is_empty() {
                 &self.transformed_data
             } else {
@@ -102,17 +101,15 @@ impl Interpreter {
         let mut result = Vec::new();
         for line in reader.lines() {
             let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
-
             let json_map: IndexMap<String, Value> = serde_json::from_str(&line)
                 .map_err(|e| format!("JSON parsing error: {}", e))?;
-
             result.push(json_map);
         }
 
         Ok(result)
     }
 
-    /// 🔹 결과 데이터를 출력 파일(JSONL)로 저장
+    /// 🔹 결과 데이터를 JSONL로 저장
     fn save_to_output_file(
         path: &str,
         data: &Vec<IndexMap<String, Value>>,
