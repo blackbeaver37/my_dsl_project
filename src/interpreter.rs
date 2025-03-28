@@ -1,5 +1,5 @@
 use crate::parser::Command;
-use crate::evaluator::evaluate_expression;
+use crate::evaluator::{evaluate_expression, EvaluatorState}; // 🔹 EvaluatorState 포함
 
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -29,6 +29,9 @@ impl Interpreter {
 
     /// 🔹 DSL 명령어(Command) 실행
     pub fn run(&mut self, commands: Vec<Command>) -> Result<(), String> {
+        // ✅ serial() 처리를 위한 evaluator 상태 초기화
+        let mut eval_state = EvaluatorState::new();
+
         for command in commands {
             match command {
                 // 📌 input "파일명";
@@ -60,15 +63,14 @@ impl Interpreter {
                 }
 
                 // 📌 transform { ... }
-                // - 입력 데이터를 기반으로 새로운 구조로 재구성
                 Command::Transform(assignments) => {
-                    self.transformed_data.clear(); // 이전 transform 결과 초기화
+                    self.transformed_data.clear();
 
                     for original in &self.jsonl_data {
                         let mut new_record = IndexMap::new();
 
                         for (field_name, expr) in &assignments {
-                            let value = evaluate_expression(expr, original)?; // 문자열 또는 객체
+                            let value = evaluate_expression(expr, original, &mut eval_state)?; // ✅ 상태 전달
                             new_record.insert(field_name.clone(), value);
                         }
 
@@ -92,7 +94,6 @@ impl Interpreter {
         Ok(())
     }
 
-    /// 🔹 JSONL 파일을 읽어서 IndexMap 리스트로 반환
     fn read_jsonl_file(path: &str) -> Result<Vec<IndexMap<String, Value>>, String> {
         let file = File::open(path)
             .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
@@ -109,7 +110,6 @@ impl Interpreter {
         Ok(result)
     }
 
-    /// 🔹 결과 데이터를 JSONL로 저장
     fn save_to_output_file(
         path: &str,
         data: &Vec<IndexMap<String, Value>>,

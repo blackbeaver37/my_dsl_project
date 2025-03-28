@@ -24,6 +24,7 @@ pub enum Expression {
     Literal(String),
     Concat(Vec<Expression>),
     RawRecord, // ✅ raw() 함수 → 전체 record 반환하는 표현식
+    Serial,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -233,6 +234,15 @@ impl Parser {
                     self.expect(&Token::RParen)?;
                     Expression::RawRecord // ✅ raw() -> 전체 record 반환
                 }
+
+                // ✅ serial() 함수 호출 파싱
+                Some(Token::Identifier(id)) if id == "serial" => {
+                    self.advance();
+                    self.expect(&Token::LParen)?;
+                    self.expect(&Token::RParen)?;
+                    Expression::Serial
+                }
+
                 other => return Err(format!("Unexpected token in expression: {:?}", other)),
             };
 
