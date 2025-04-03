@@ -23,15 +23,6 @@ impl EvaluatorState {
 }
 
 /// 🔍 표현식을 평가하여 JSON 값(Value)으로 변환
-///
-/// # 인자
-/// - `expr`: 평가할 Expression
-/// - `record`: 현재 처리 중인 한 줄의 JSONL 데이터
-/// - `state`: serial 등 상태 저장용 구조체
-///
-/// # 반환
-/// - Ok(Value): 평가 결과
-/// - Err(String): 에러 메시지
 pub fn evaluate_expression(
     expr: &Expression,
     record: &IndexMap<String, Value>,
@@ -41,19 +32,13 @@ pub fn evaluate_expression(
         // 📌 문자열 리터럴
         Expression::Literal(s) => Ok(Value::String(unescape_string(s))),
 
-        // 📌 일반 필드 (@필드)
-        Expression::Field(name) => {
-            let value = evaluate_field_with_modifiers(
-                &FieldWithModifiers {
-                    name: name.clone(),
-                    modifiers: vec![],
-                },
-                record,
-            )?;
-            Ok(Value::String(value))
+        // ✅ 중첩 필드 (@meta.score 등)
+        Expression::FieldPath(path) => {
+            let value = get_nested_value_as_string(record, path);
+            Ok(Value::String(value.unwrap_or_default()))
         }
 
-        // 📌 확장 필드 (@필드.suffix(...) 등)
+        // ✅ 확장 필드 + 중첩 경로
         Expression::FieldWithModifiers(field_struct) => {
             let value = evaluate_field_with_modifiers(field_struct, record)?;
             Ok(Value::String(value))
@@ -90,12 +75,9 @@ fn evaluate_field_with_modifiers(
     field: &FieldWithModifiers,
     record: &IndexMap<String, Value>,
 ) -> Result<String, String> {
-    let mut raw_value: Option<String> = match record.get(&field.name) {
-        Some(Value::String(s)) => Some(s.clone()),
-        Some(other) => Some(other.to_string()),
-        None => None,
-    };
+    let mut raw_value: Option<String> = get_nested_value_as_string(record, &field.path);
 
+    // default 먼저 적용
     for modifier in &field.modifiers {
         if let FieldModifier::Default(default_str) = modifier {
             if raw_value.is_none() || raw_value.as_deref() == Some("") {
@@ -125,4 +107,26 @@ fn evaluate_field_with_modifiers(
     }
 
     Ok(value)
+}
+
+/// 🔍 중첩 경로를 따라 값 가져오기 (예: ["meta", "score"])
+fn get_nested_value_as_string(
+    record: &IndexMap<String, Value>,
+    path: &[String],
+) -> Option<String> {
+    let mut current: &Value = record.get(&path[0])?;
+
+    for key in &path[1..] {
+        match current {
+            Value::Object(map) => {
+                current = map.get(key)?;
+            }
+            _ => return None,
+        }
+    }
+
+    match current {
+        Value::String(s) => Some(s.clone()),
+        other => Some(other.to_string()),
+    }
 }

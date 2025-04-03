@@ -13,17 +13,17 @@ pub enum FieldModifier {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldWithModifiers {
-    pub name: String,
+    pub path: Vec<String>,
     pub modifiers: Vec<FieldModifier>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
-    Field(String),
-    FieldWithModifiers(FieldWithModifiers),
+    FieldPath(Vec<String>),                       // ✅ 단일 필드 or 중첩 경로
+    FieldWithModifiers(FieldWithModifiers),       // ✅ 경로 + 수정자
     Literal(String),
     Concat(Vec<Expression>),
-    RawRecord, // ✅ raw() 함수 → 전체 record 반환하는 표현식
+    RawRecord,
     Serial,
 }
 
@@ -164,78 +164,97 @@ impl Parser {
         Ok(Command::Transform(transforms))
     }
 
-    fn parse_field_with_modifiers(&mut self, name: String) -> Expression {
+    /// 🔹 수정자 파싱: .prefix("x").suffix("y") 등
+    fn parse_modifiers(&mut self) -> Result<Vec<FieldModifier>, String> {
         let mut modifiers = Vec::new();
 
         while let Some(Token::Dot) = self.current_token() {
-            self.advance(); // consume '.'
+            // 미리 다음 두 토큰을 clone 해서 immutable 참조 끊기
+            let lookahead1 = self.tokens.get(self.position + 1).cloned();
+            let lookahead2 = self.tokens.get(self.position + 2).cloned();
 
-            let modifier_name = match self.current_token() {
-                Some(Token::Identifier(name)) => {
-                    let name = name.clone();
-                    self.advance();
-                    name
+            match (lookahead1, lookahead2) {
+                (Some(Token::Identifier(name)), Some(Token::LParen)) => {
+                    self.advance(); // Dot
+                    self.advance(); // Identifier
+                    let modifier_name = name;
+
+                    self.expect(&Token::LParen)?;
+                    let value = match self.current_token() {
+                        Some(Token::StringLiteral(s)) => {
+                            let s = s.clone();
+                            self.advance();
+                            s
+                        }
+                        _ => break,
+                    };
+                    self.expect(&Token::RParen)?;
+
+                    let modifier = match modifier_name.as_str() {
+                        "prefix" => FieldModifier::Prefix(value),
+                        "suffix" => FieldModifier::Suffix(value),
+                        "default" => FieldModifier::Default(value),
+                        _ => break,
+                    };
+
+                    modifiers.push(modifier);
                 }
                 _ => break,
-            };
-
-            if let Err(_) = self.expect(&Token::LParen) {
-                break;
             }
-
-            let value = match self.current_token() {
-                Some(Token::StringLiteral(s)) => {
-                    let s = s.clone();
-                    self.advance();
-                    s
-                }
-                _ => break,
-            };
-
-            if let Err(_) = self.expect(&Token::RParen) {
-                break;
-            }
-
-            let modifier = match modifier_name.as_str() {
-                "prefix" => FieldModifier::Prefix(value),
-                "suffix" => FieldModifier::Suffix(value),
-                "default" => FieldModifier::Default(value),
-                _ => break,
-            };
-
-            modifiers.push(modifier);
         }
 
-        if modifiers.is_empty() {
-            Expression::Field(name)
-        } else {
-            Expression::FieldWithModifiers(FieldWithModifiers { name, modifiers })
-        }
+        Ok(modifiers)
     }
 
+    /// 🔹 표현식 파싱 (문자열, 필드, 함수, 연결 등)
     fn parse_expression(&mut self) -> Result<Expression, String> {
         let mut parts = Vec::new();
 
         loop {
             let expr = match self.current_token() {
-                Some(Token::Field(name)) => {
-                    let name = name.clone();
+                Some(Token::Field(first)) => {
+                    let mut path = vec![first.clone()];
                     self.advance();
-                    self.parse_field_with_modifiers(name)
+
+                    while let Some(Token::Dot) = self.current_token() {
+                        let lookahead1 = self.tokens.get(self.position + 1).cloned();
+                        let lookahead2 = self.tokens.get(self.position + 2).cloned();
+
+                        match (lookahead1, lookahead2) {
+                            (Some(Token::Identifier(id)), Some(Token::LParen)) => {
+                                // modifier 시작이므로 루프 탈출
+                                break;
+                            }
+                            (Some(Token::Identifier(id)), _) => {
+                                self.advance(); // Dot
+                                self.advance(); // Identifier
+                                path.push(id);
+                            }
+                            _ => break,
+                        }
+                    }
+
+                    let modifiers = self.parse_modifiers()?;
+                    if modifiers.is_empty() {
+                        Expression::FieldPath(path)
+                    } else {
+                        Expression::FieldWithModifiers(FieldWithModifiers { path, modifiers })
+                    }
                 }
+
                 Some(Token::StringLiteral(s)) => {
                     let s = s.clone();
                     self.advance();
                     Expression::Literal(s)
                 }
+
                 Some(Token::Identifier(id)) if id == "raw" => {
                     self.advance();
                     self.expect(&Token::LParen)?;
                     self.expect(&Token::RParen)?;
-                    Expression::RawRecord // ✅ raw() -> 전체 record 반환
+                    Expression::RawRecord
                 }
 
-                // ✅ serial() 함수 호출 파싱
                 Some(Token::Identifier(id)) if id == "serial" => {
                     self.advance();
                     self.expect(&Token::LParen)?;
