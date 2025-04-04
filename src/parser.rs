@@ -1,7 +1,11 @@
+//! ✅ DSL 파서
+//!
+//! 토큰(Token) 리스트를 의미 있는 명령어(Command)와 표현식(Expression)으로 변환 (AST 생성)
+
 use crate::lexer::Token;
 
 // ==========================================================
-// ✅ 표현식(Expression)과 명령어(Command) 구조 정의
+// ✅ DSL 내부 구조 정의
 // ==========================================================
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,12 +23,12 @@ pub struct FieldWithModifiers {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
-    FieldPath(Vec<String>),                       // ✅ 단일 필드 or 중첩 경로
-    FieldWithModifiers(FieldWithModifiers),       // ✅ 경로 + 수정자
-    Literal(String),
-    Concat(Vec<Expression>),
-    RawRecord,
-    Serial,
+    FieldPath(Vec<String>),                       
+    FieldWithModifiers(FieldWithModifiers),       
+    Literal(String),                              
+    Concat(Vec<Expression>),                      
+    RawRecord,                                    
+    Serial,                                       
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,7 +41,7 @@ pub enum Command {
 }
 
 // ==========================================================
-// ✅ Parser 구조체 정의
+// ✅ Parser 정의
 // ==========================================================
 
 pub struct Parser {
@@ -88,27 +92,23 @@ impl Parser {
 
     fn parse_input(&mut self) -> Result<Command, String> {
         self.advance();
-        match self.current_token() {
-            Some(Token::StringLiteral(path)) => {
-                let path = path.clone();
-                self.advance();
-                self.expect(&Token::Semicolon)?;
-                Ok(Command::Input(path))
-            }
-            other => Err(format!("Expected string literal after 'input', but found {:?}", other)),
+        if let Some(Token::StringLiteral(path)) = self.current_token().cloned() {
+            self.advance();
+            self.expect(&Token::Semicolon)?;
+            Ok(Command::Input(path))
+        } else {
+            Err(format!("Expected string literal after 'input', but found {:?}", self.current_token()))
         }
     }
 
     fn parse_output(&mut self) -> Result<Command, String> {
         self.advance();
-        match self.current_token() {
-            Some(Token::StringLiteral(path)) => {
-                let path = path.clone();
-                self.advance();
-                self.expect(&Token::Semicolon)?;
-                Ok(Command::Output(path))
-            }
-            other => Err(format!("Expected string literal after 'output', but found {:?}", other)),
+        if let Some(Token::StringLiteral(path)) = self.current_token().cloned() {
+            self.advance();
+            self.expect(&Token::Semicolon)?;
+            Ok(Command::Output(path))
+        } else {
+            Err(format!("Expected string literal after 'output', but found {:?}", self.current_token()))
         }
     }
 
@@ -121,14 +121,12 @@ impl Parser {
             }
             Some(Token::Identifier(id)) if id == "line" => {
                 self.advance();
-                match self.current_token() {
-                    Some(Token::Number(n)) => {
-                        let line_num = *n;
-                        self.advance();
-                        self.expect(&Token::Semicolon)?;
-                        Ok(Command::PrintLine(line_num))
-                    }
-                    other => Err(format!("Expected number after 'print line', but found {:?}", other)),
+                if let Some(Token::Number(n)) = self.current_token().cloned() {
+                    self.advance();
+                    self.expect(&Token::Semicolon)?;
+                    Ok(Command::PrintLine(n))
+                } else {
+                    Err(format!("Expected number after 'print line', but found {:?}", self.current_token()))
                 }
             }
             other => Err(format!("Unexpected token after 'print': {:?}", other)),
@@ -164,25 +162,22 @@ impl Parser {
         Ok(Command::Transform(transforms))
     }
 
-    /// 🔹 수정자 파싱: .prefix("x").suffix("y") 등
     fn parse_modifiers(&mut self) -> Result<Vec<FieldModifier>, String> {
         let mut modifiers = Vec::new();
 
         while let Some(Token::Dot) = self.current_token() {
-            // 미리 다음 두 토큰을 clone 해서 immutable 참조 끊기
             let lookahead1 = self.tokens.get(self.position + 1).cloned();
             let lookahead2 = self.tokens.get(self.position + 2).cloned();
 
             match (lookahead1, lookahead2) {
                 (Some(Token::Identifier(name)), Some(Token::LParen)) => {
-                    self.advance(); // Dot
-                    self.advance(); // Identifier
+                    self.advance();
+                    self.advance();
                     let modifier_name = name;
 
                     self.expect(&Token::LParen)?;
-                    let value = match self.current_token() {
+                    let value = match self.current_token().cloned() {
                         Some(Token::StringLiteral(s)) => {
-                            let s = s.clone();
                             self.advance();
                             s
                         }
@@ -206,7 +201,6 @@ impl Parser {
         Ok(modifiers)
     }
 
-    /// 🔹 표현식 파싱 (문자열, 필드, 함수, 연결 등)
     fn parse_expression(&mut self) -> Result<Expression, String> {
         let mut parts = Vec::new();
 
@@ -221,13 +215,10 @@ impl Parser {
                         let lookahead2 = self.tokens.get(self.position + 2).cloned();
 
                         match (lookahead1, lookahead2) {
-                            (Some(Token::Identifier(id)), Some(Token::LParen)) => {
-                                // modifier 시작이므로 루프 탈출
-                                break;
-                            }
+                            (Some(Token::Identifier(_)), Some(Token::LParen)) => break,
                             (Some(Token::Identifier(id)), _) => {
-                                self.advance(); // Dot
-                                self.advance(); // Identifier
+                                self.advance();
+                                self.advance();
                                 path.push(id);
                             }
                             _ => break,

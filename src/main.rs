@@ -1,3 +1,9 @@
+//! ✅ main.rs
+//!
+//! DSL 실행기의 진입점 (Command Line Interface)
+//! 사용 예시:
+//!     $ mydsl script.jdl
+
 mod lexer;
 mod parser;
 mod evaluator;
@@ -5,17 +11,17 @@ mod interpreter;
 mod utils;
 
 use lexer::Lexer;
-use parser::{Parser, Command};
+use parser::Parser;
 use interpreter::Interpreter;
 
 use std::env;
 use std::fs;
 
-// ✅ 디버그 출력용 플래그
+/// ✅ 디버그 출력용 전역 플래그
 const DEBUG: bool = false;
 
 fn main() {
-    // ✅ 명령줄 인자 처리
+    // 🔹 명령줄 인자 확인: mydsl <파일명>
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("❌ Usage: mydsl <script.jdl>");
@@ -24,12 +30,11 @@ fn main() {
 
     let source_path = &args[1];
 
-    // ✅ 1. DSL 스크립트 파일 읽기
-    let source = fs::read_to_string(source_path)
-        .unwrap_or_else(|e| {
-            eprintln!("❌ Failed to read DSL file '{}': {}", source_path, e);
-            std::process::exit(1);
-        });
+    // 🔹 DSL 파일 읽기
+    let source = fs::read_to_string(source_path).unwrap_or_else(|e| {
+        eprintln!("❌ Failed to read DSL file '{}': {}", source_path, e);
+        std::process::exit(1);
+    });
 
     if DEBUG {
         println!("🔹 DSL Script Loaded From '{}':\n", source_path);
@@ -37,7 +42,7 @@ fn main() {
         println!();
     }
 
-    // ✅ 2. 렉서 실행 → 입력 문자열을 Token 리스트로 변환
+    // 🔹 렉싱: 소스 → 토큰 리스트
     let mut lexer = Lexer::new(&source);
     let tokens = lexer.tokenize();
 
@@ -49,7 +54,7 @@ fn main() {
         println!();
     }
 
-    // ✅ 3. 파서 실행 → Token 리스트를 Command 리스트(AST)로 변환
+    // 🔹 파싱: 토큰 리스트 → 명령어 리스트
     let mut parser = Parser::new(tokens);
     let commands = match parser.parse() {
         Ok(cmds) => cmds,
@@ -67,12 +72,12 @@ fn main() {
         println!();
     }
 
-    // ✅ 4. 인터프리터 실행 → 명령어(Command) 리스트를 실제 동작으로 실행
+    // 🔹 실행: 명령어 리스트 실행
     if DEBUG {
-       println!("🔹 Interpreter Output:");
+        println!("🔹 Interpreter Output:");
     }
-    let mut interpreter = Interpreter::new();
 
+    let mut interpreter = Interpreter::new();
     if let Err(e) = interpreter.run(commands) {
         eprintln!("❌ Runtime error: {}", e);
         std::process::exit(1);

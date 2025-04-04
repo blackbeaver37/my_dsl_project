@@ -1,5 +1,12 @@
+//! ✅ interpreter.rs
+//!
+//! DSL 명령어(Command)를 받아 실제 동작을 수행하는 인터프리터
+//! - input/output 파일 처리
+//! - print / print line
+//! - transform 명령 실행 및 JSON 변환 처리
+
 use crate::parser::Command;
-use crate::evaluator::{evaluate_expression, EvaluatorState}; // 🔹 EvaluatorState 포함
+use crate::evaluator::{evaluate_expression, EvaluatorState};
 
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -7,13 +14,12 @@ use std::io::{BufRead, BufReader, Write};
 use serde_json::Value;
 use indexmap::IndexMap;
 
-/// ✅ Interpreter 구조체
-/// - DSL 명령어(Command)를 해석하고 실행
+/// ✅ DSL 인터프리터 구조체
 pub struct Interpreter {
-    input_file_path: Option<String>,                 // 입력 파일 경로
-    output_file_path: Option<String>,                // 출력 파일 경로
-    jsonl_data: Vec<IndexMap<String, Value>>,        // 입력 JSONL 데이터
-    transformed_data: Vec<IndexMap<String, Value>>,  // transform 결과 데이터
+    input_file_path: Option<String>,
+    output_file_path: Option<String>,
+    jsonl_data: Vec<IndexMap<String, Value>>,        // 원본 JSONL
+    transformed_data: Vec<IndexMap<String, Value>>,  // transform 결과
 }
 
 impl Interpreter {
@@ -27,9 +33,8 @@ impl Interpreter {
         }
     }
 
-    /// 🔹 DSL 명령어(Command) 실행
+    /// 🔹 DSL 명령어 실행
     pub fn run(&mut self, commands: Vec<Command>) -> Result<(), String> {
-        // ✅ serial() 처리를 위한 evaluator 상태 초기화
         let mut eval_state = EvaluatorState::new();
 
         for command in commands {
@@ -70,7 +75,7 @@ impl Interpreter {
                         let mut new_record = IndexMap::new();
 
                         for (field_name, expr) in &assignments {
-                            let value = evaluate_expression(expr, original, &mut eval_state)?; // ✅ 상태 전달
+                            let value = evaluate_expression(expr, original, &mut eval_state)?;
                             new_record.insert(field_name.clone(), value);
                         }
 
@@ -94,6 +99,7 @@ impl Interpreter {
         Ok(())
     }
 
+    /// 🔹 JSONL 파일 읽기
     fn read_jsonl_file(path: &str) -> Result<Vec<IndexMap<String, Value>>, String> {
         let file = File::open(path)
             .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
@@ -110,6 +116,7 @@ impl Interpreter {
         Ok(result)
     }
 
+    /// 🔹 결과 JSONL 저장
     fn save_to_output_file(
         path: &str,
         data: &Vec<IndexMap<String, Value>>,

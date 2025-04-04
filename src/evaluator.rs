@@ -10,7 +10,7 @@ use crate::utils::unescape_string;
 use indexmap::IndexMap;
 use serde_json::{Value, Map};
 
-/// ✅ serial()을 위해 평가자 상태를 저장하는 구조체
+/// ✅ serial()을 위한 상태 저장 구조체
 #[derive(Default)]
 pub struct EvaluatorState {
     pub serial_counter: usize,
@@ -22,7 +22,12 @@ impl EvaluatorState {
     }
 }
 
-/// 🔍 표현식을 평가하여 JSON 값(Value)으로 변환
+/// 🔍 표현식을 평가하여 JSON Value로 변환
+///
+/// # Params
+/// - `expr`: 파싱된 Expression
+/// - `record`: 한 줄의 JSONL 데이터 (IndexMap<String, Value>)
+/// - `state`: serial 카운터를 위한 상태 구조체
 pub fn evaluate_expression(
     expr: &Expression,
     record: &IndexMap<String, Value>,
@@ -32,19 +37,19 @@ pub fn evaluate_expression(
         // 📌 문자열 리터럴
         Expression::Literal(s) => Ok(Value::String(unescape_string(s))),
 
-        // ✅ 중첩 필드 (@meta.score 등)
+        // 📌 일반 필드 (@meta.score 등)
         Expression::FieldPath(path) => {
             let value = get_nested_value_as_string(record, path);
             Ok(Value::String(value.unwrap_or_default()))
         }
 
-        // ✅ 확장 필드 + 중첩 경로
+        // 📌 필드 + 수정자 (prefix, suffix, default)
         Expression::FieldWithModifiers(field_struct) => {
             let value = evaluate_field_with_modifiers(field_struct, record)?;
             Ok(Value::String(value))
         }
 
-        // 📌 여러 표현식을 +로 연결 (문자열 연결)
+        // 📌 여러 표현식 연결
         Expression::Concat(parts) => {
             let mut result = String::new();
             for part in parts {
@@ -55,13 +60,13 @@ pub fn evaluate_expression(
             Ok(Value::String(result))
         }
 
-        // ✅ raw() → 전체 레코드 반환
+        // ✅ raw() → 전체 객체 반환
         Expression::RawRecord => {
             let map: Map<String, Value> = record.clone().into_iter().collect();
             Ok(Value::Object(map))
         }
 
-        // ✅ serial() → 1, 2, 3, ... 값을 문자열로 반환
+        // ✅ serial() → 자동 증가 문자열 반환
         Expression::Serial => {
             let result = state.serial_counter.to_string();
             state.serial_counter += 1;
@@ -70,14 +75,15 @@ pub fn evaluate_expression(
     }
 }
 
-/// 🔍 확장 필드(FieldWithModifiers) 평가
+/// 🔍 FieldWithModifiers 를 평가하여 문자열로 반환
 fn evaluate_field_with_modifiers(
     field: &FieldWithModifiers,
     record: &IndexMap<String, Value>,
 ) -> Result<String, String> {
+    // 경로 따라 실제 값 가져오기
     let mut raw_value: Option<String> = get_nested_value_as_string(record, &field.path);
 
-    // default 먼저 적용
+    // 1️⃣ default() 우선 적용
     for modifier in &field.modifiers {
         if let FieldModifier::Default(default_str) = modifier {
             if raw_value.is_none() || raw_value.as_deref() == Some("") {
@@ -94,6 +100,7 @@ fn evaluate_field_with_modifiers(
         return Ok(String::new());
     }
 
+    // 2️⃣ prefix/suffix 적용
     for modifier in &field.modifiers {
         match modifier {
             FieldModifier::Prefix(pre) => {
@@ -102,14 +109,14 @@ fn evaluate_field_with_modifiers(
             FieldModifier::Suffix(suf) => {
                 value = format!("{}{}", value, unescape_string(suf));
             }
-            FieldModifier::Default(_) => {}
+            FieldModifier::Default(_) => {} // 이미 위에서 처리
         }
     }
 
     Ok(value)
 }
 
-/// 🔍 중첩 경로를 따라 값 가져오기 (예: ["meta", "score"])
+/// 🔍 중첩 경로 (["a", "b", "c"]) 에 따라 값을 가져옴
 fn get_nested_value_as_string(
     record: &IndexMap<String, Value>,
     path: &[String],
