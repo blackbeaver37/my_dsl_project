@@ -1,5 +1,5 @@
-input "data/sample.jsonl";
-output "data/updated.jsonl";
+input "../data/sample.jsonl";
+output "../data/updated.jsonl";
 
 transform {
     id = serial();
@@ -11,3 +11,4 @@ transform {
 }
 
 print line 1;
+print line 2;

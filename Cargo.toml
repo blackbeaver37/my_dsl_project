@@ -7,3 +7,7 @@ edition = "2024"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 indexmap = { version = "2.1", features = ["serde"] }
+
+[[bin]]
+name = "mydsl"
+path = "src/main.rs"
