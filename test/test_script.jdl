@@ -5,10 +5,32 @@ transform {
     id = serial();
     data_id = @문항번호;
     data_type = "Text";
-    testField = @test.key + @test.tag.prefix(", ") + @test.meta.prefix(" and ") + "!!";
+    testField = @test.key + @test.tag.prefix(", ") + @test.meta.prefix(" and ") + "!!!";
     content = @문제.prefix("문제: ").default("없음") + @정답.prefix("\n정답: ").default("없음");
     add_info = raw();
 }
 
 print line 1;
-print line 2;
+// print line 2;
+
+
+/*
+transform => "data/updated.jsonl" {
+    id = serial();
+    data_id = @문항번호;
+    data_type = "Text";
+    testField = @test.key + @test.tag.prefix(", ") + @test.meta.prefix(" and ") + "!!";
+    content = @문제.prefix("문제: ").default("없음") + @정답.prefix("\n정답: ").default("없음");
+    add_info = raw();
+}
+
+validate("data/result.json") {
+    check_key(@문항번호, @문제, @정답);
+    check_value(@문항번호, @문제, @정답) != "";
+    check_type(@문항번호, @문제, @정답);
+
+    check KEY in [@문항번호, @문제, @정답];
+    check VALUE in [@문항번호, @문제, @정답] not ["", Null];
+    check TYPE in [@문항번호, @문제, @정답] is [Int, String, String];
+}
+*/
