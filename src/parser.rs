@@ -73,23 +73,28 @@ impl Parser {
         }
     }
 
+    /// 🔹 DSL 전체 파싱
     pub fn parse(&mut self) -> Result<Vec<Command>, String> {
         let mut commands = Vec::new();
 
         while let Some(token) = self.current_token() {
-            let command = match token {
-                Token::Input => self.parse_input()?,
-                Token::Output => self.parse_output()?,
-                Token::Print => self.parse_print()?,
-                Token::Transform => self.parse_transform()?,
+            match token {
+                Token::Comment(_) => {
+                    self.advance();
+                    continue;
+                }
+                Token::Input => commands.push(self.parse_input()?),
+                Token::Output => commands.push(self.parse_output()?),
+                Token::Print => commands.push(self.parse_print()?),
+                Token::Transform => commands.push(self.parse_transform()?),
                 other => return Err(format!("Unexpected token in command position: {:?}", other)),
             };
-            commands.push(command);
         }
 
         Ok(commands)
     }
 
+    /// 🔹 input "파일"; 구문 파싱
     fn parse_input(&mut self) -> Result<Command, String> {
         self.advance();
         if let Some(Token::StringLiteral(path)) = self.current_token().cloned() {
@@ -101,6 +106,7 @@ impl Parser {
         }
     }
 
+    /// 🔹 output "파일"; 구문 파싱
     fn parse_output(&mut self) -> Result<Command, String> {
         self.advance();
         if let Some(Token::StringLiteral(path)) = self.current_token().cloned() {
@@ -112,6 +118,7 @@ impl Parser {
         }
     }
 
+    /// 🔹 print; 또는 print line 3; 구문 파싱
     fn parse_print(&mut self) -> Result<Command, String> {
         self.advance();
         match self.current_token() {
@@ -133,6 +140,7 @@ impl Parser {
         }
     }
 
+    /// 🔹 transform { key = expr; ... } 파싱
     fn parse_transform(&mut self) -> Result<Command, String> {
         self.advance();
         self.expect(&Token::LBrace)?;
@@ -141,6 +149,9 @@ impl Parser {
 
         while let Some(token) = self.current_token() {
             match token {
+                Token::Comment(_) => {
+                    self.advance();
+                }
                 Token::RBrace => {
                     self.advance();
                     break;
@@ -162,6 +173,7 @@ impl Parser {
         Ok(Command::Transform(transforms))
     }
 
+    /// 🔹 .prefix("x").suffix("y") 등 수정자 파싱
     fn parse_modifiers(&mut self) -> Result<Vec<FieldModifier>, String> {
         let mut modifiers = Vec::new();
 
@@ -201,11 +213,17 @@ impl Parser {
         Ok(modifiers)
     }
 
+    /// 🔹 표현식 파싱: 필드, 리터럴, 함수 호출, 연결 등
     fn parse_expression(&mut self) -> Result<Expression, String> {
         let mut parts = Vec::new();
 
         loop {
             let expr = match self.current_token() {
+                Some(Token::Comment(_)) => {
+                    self.advance();
+                    continue;
+                }
+
                 Some(Token::Field(first)) => {
                     let mut path = vec![first.clone()];
                     self.advance();
@@ -260,6 +278,9 @@ impl Parser {
 
             match self.current_token() {
                 Some(Token::Plus) => {
+                    self.advance();
+                }
+                Some(Token::Comment(_)) => {
                     self.advance();
                 }
                 _ => break,

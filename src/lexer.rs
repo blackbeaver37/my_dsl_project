@@ -30,6 +30,9 @@ pub enum Token {
     Dot,                    // .
     LParen, RParen,         // (, )
 
+    // 🔹 주석
+    Comment(String),        // // 또는 /* */ 주석
+
     // 🔹 예외
     Unknown(char),          // 알 수 없는 문자
     EOF,                    // 입력 종료
@@ -115,10 +118,53 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// 🔹 라인 주석 파싱 (예: // ...)
+    fn read_line_comment(&mut self) -> Token {
+        let mut result = String::new();
+
+        while let Some(&c) = self.peek_char() {
+            if c == '\n' {
+                break;
+            }
+            result.push(self.next_char().unwrap());
+        }
+
+        Token::Comment(result.trim().to_string())
+    }
+
+    /// 🔹 블록 주석 파싱 (예: /* ... */)
+    fn read_block_comment(&mut self) -> Token {
+        let mut result = String::new();
+
+        while let Some(c) = self.next_char() {
+            if c == '*' {
+                if let Some(&'/') = self.peek_char() {
+                    self.next_char(); // consume '/'
+                    break;
+                }
+            }
+            result.push(c);
+        }
+
+        Token::Comment(result.trim().to_string())
+    }
+
     /// 🔹 입력에서 토큰 하나 파싱
     pub fn next_token(&mut self) -> Token {
         while let Some(c) = self.next_char() {
             match c {
+                '/' => {
+                    if let Some(&'/') = self.peek_char() {
+                        self.next_char(); // consume second '/'
+                        return self.read_line_comment();
+                    } else if let Some(&'*') = self.peek_char() {
+                        self.next_char(); // consume '*'
+                        return self.read_block_comment();
+                    } else {
+                        return Token::Unknown(c);
+                    }
+                }
+
                 '"' => return self.read_string(),
                 '@' => return self.read_field(),
                 '+' => return Token::Plus,

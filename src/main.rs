@@ -18,7 +18,7 @@ use std::env;
 use std::fs;
 
 /// ✅ 디버그 출력용 전역 플래그
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 fn main() {
     // 🔹 명령줄 인자 확인: mydsl <파일명>
