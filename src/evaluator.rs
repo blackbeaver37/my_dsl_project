@@ -4,22 +4,52 @@
 //! - 문자열 기반 표현식은 Value::String("...") 형태로 반환
 //! - raw()는 JSON 객체 그대로 Value::Object(...)로 반환
 //! - serial()은 1부터 자동으로 증가하는 문자열 숫자
+//! - 변수 참조도 지원됨 (let/const로 정의된 변수)
 
 use crate::parser::{Expression, FieldWithModifiers, FieldModifier};
 use crate::utils::unescape_string;
+
 use indexmap::IndexMap;
 use serde_json::{Value, Map};
+use std::collections::HashMap;
 
-/// ✅ serial()을 위한 상태 저장 구조체
+/// ✅ serial()과 변수 상태를 위한 구조체
 #[derive(Default)]
 pub struct EvaluatorState {
     pub serial_counter: usize,
+    pub variables: HashMap<String, (Value, bool)>, // (값, 가변 여부)
 }
 
 impl EvaluatorState {
+    /// 🔹 초기화
     pub fn new() -> Self {
-        Self { serial_counter: 1 }
+        Self {
+            serial_counter: 1,
+            variables: HashMap::new(),
+        }
     }
+
+    /// 🔹 변수 또는 상수 등록
+    pub fn define_variable(
+        &mut self,
+        name: String,
+        value: Value,
+        is_mutable: bool,
+    ) -> Result<(), String> {
+        if self.variables.contains_key(&name) {
+            return Err(format!("Variable '{}' already defined.", name));
+        }
+        self.variables.insert(name, (value, is_mutable));
+        Ok(())
+    }
+
+    /// 🔹 변수 조회
+    pub fn get_variable(&self, name: &str) -> Result<Value, String> {
+        self.variables
+            .get(name)
+            .map(|(v, _)| v.clone())
+            .ok_or_else(|| format!("Variable '{}' is not defined.", name))
+    }    
 }
 
 /// 🔍 표현식을 평가하여 JSON Value로 변환
@@ -27,7 +57,7 @@ impl EvaluatorState {
 /// # Params
 /// - `expr`: 파싱된 Expression
 /// - `record`: 한 줄의 JSONL 데이터 (IndexMap<String, Value>)
-/// - `state`: serial 카운터를 위한 상태 구조체
+/// - `state`: serial 카운터 및 변수 상태 구조체
 pub fn evaluate_expression(
     expr: &Expression,
     record: &IndexMap<String, Value>,
@@ -41,7 +71,7 @@ pub fn evaluate_expression(
         Expression::FieldPath(path) => {
             let value = get_nested_value_as_string(record, path);
             Ok(Value::String(value.unwrap_or_default()))
-        }
+        }        
 
         // 📌 필드 + 수정자 (prefix, suffix, default)
         Expression::FieldWithModifiers(field_struct) => {
@@ -71,6 +101,11 @@ pub fn evaluate_expression(
             let result = state.serial_counter.to_string();
             state.serial_counter += 1;
             Ok(Value::String(result))
+        }
+
+        Expression::Variable(name) => {
+            let value = state.get_variable(name)?;
+            Ok(value)
         }
     }
 }

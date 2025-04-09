@@ -1,10 +1,16 @@
 input "data/sample.jsonl";
 output "data/updated.jsonl";
 
+let value1 = "value1";
+let te = "Te";
+let xt = "xt";
+const text = te + xt;
+
 transform {
     id = serial();
     data_id = @문항번호;
-    data_type = "Text";
+    data_type = text;
+    testValue = value1;
     testField = @test.key + @test.tag.prefix(", ") + @test.meta.prefix(" and ") + "!!!";
     content = @문제.prefix("문제: ").default("없음") + @정답.prefix("\n정답: ").default("없음");
     add_info = raw();

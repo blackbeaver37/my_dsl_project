@@ -15,27 +15,29 @@ pub enum Token {
     Output,
     Transform,
     Print,
+    Let,                       // 변수 선언
+    Const,                     // 상수 선언
 
     // 🔹 리터럴 / 참조
-    StringLiteral(String),   // 예: "data.jsonl"
-    Identifier(String),      // 예: suffix, line
-    Field(String),           // 예: @문제
-    Number(usize),           // 예: 42
+    StringLiteral(String),     // 예: "data.jsonl"
+    Identifier(String),        // 예: suffix, line
+    Field(String),             // 예: @문제
+    Number(usize),             // 예: 42
 
     // 🔹 연산자 및 구분자
-    Plus,                    // +
-    Equal,                   // =
-    Semicolon,              // ;
-    LBrace, RBrace,         // {, }
-    Dot,                    // .
-    LParen, RParen,         // (, )
+    Plus,                      // +
+    Equal,                     // =
+    Semicolon,                // ;
+    LBrace, RBrace,           // {, }
+    Dot,                      // .
+    LParen, RParen,           // (, )
 
     // 🔹 주석
-    Comment(String),        // // 또는 /* */ 주석
+    Comment(String),          // // 또는 /* */ 주석
 
     // 🔹 예외
-    Unknown(char),          // 알 수 없는 문자
-    EOF,                    // 입력 종료
+    Unknown(char),            // 알 수 없는 문자
+    EOF,                      // 입력 종료
 }
 
 /// ✅ 입력 문자열을 순회하며 Token을 생성하는 구조체
@@ -108,6 +110,8 @@ impl<'a> Lexer<'a> {
             "output" => Token::Output,
             "transform" => Token::Transform,
             "print" => Token::Print,
+            "let" => Token::Let,
+            "const" => Token::Const,
             _ => {
                 if let Ok(num) = value.parse::<usize>() {
                     Token::Number(num)

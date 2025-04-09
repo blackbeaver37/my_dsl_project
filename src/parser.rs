@@ -23,12 +23,13 @@ pub struct FieldWithModifiers {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
-    FieldPath(Vec<String>),                       
-    FieldWithModifiers(FieldWithModifiers),       
-    Literal(String),                              
-    Concat(Vec<Expression>),                      
-    RawRecord,                                    
-    Serial,                                       
+    FieldPath(Vec<String>),
+    FieldWithModifiers(FieldWithModifiers),
+    Literal(String),
+    Concat(Vec<Expression>),
+    RawRecord,
+    Serial,
+    Variable(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +39,8 @@ pub enum Command {
     Print,
     PrintLine(usize),
     Transform(Vec<(String, Expression)>),
+    Let(String, Expression),
+    Const(String, Expression),
 }
 
 // ==========================================================
@@ -87,6 +90,8 @@ impl Parser {
                 Token::Output => commands.push(self.parse_output()?),
                 Token::Print => commands.push(self.parse_print()?),
                 Token::Transform => commands.push(self.parse_transform()?),
+                Token::Let => commands.push(self.parse_let()?),
+                Token::Const => commands.push(self.parse_const()?),
                 other => return Err(format!("Unexpected token in command position: {:?}", other)),
             };
         }
@@ -171,6 +176,44 @@ impl Parser {
         }
 
         Ok(Command::Transform(transforms))
+    }
+
+    /// 🔹 let name = expr; 파싱
+    fn parse_let(&mut self) -> Result<Command, String> {
+        self.advance(); // consume 'let'
+
+        let name = match self.current_token() {
+            Some(Token::Identifier(id)) => {
+                let id = id.clone();
+                self.advance();
+                id
+            }
+            other => return Err(format!("Expected identifier after 'let', but found {:?}", other)),
+        };
+
+        self.expect(&Token::Equal)?;
+        let expr = self.parse_expression()?;
+        self.expect(&Token::Semicolon)?;
+        Ok(Command::Let(name, expr))
+    }
+
+    /// 🔹 const name = expr; 파싱
+    fn parse_const(&mut self) -> Result<Command, String> {
+        self.advance(); // consume 'const'
+
+        let name = match self.current_token() {
+            Some(Token::Identifier(id)) => {
+                let id = id.clone();
+                self.advance();
+                id
+            }
+            other => return Err(format!("Expected identifier after 'const', but found {:?}", other)),
+        };
+
+        self.expect(&Token::Equal)?;
+        let expr = self.parse_expression()?;
+        self.expect(&Token::Semicolon)?;
+        Ok(Command::Const(name, expr))
     }
 
     /// 🔹 .prefix("x").suffix("y") 등 수정자 파싱
@@ -269,6 +312,12 @@ impl Parser {
                     self.expect(&Token::LParen)?;
                     self.expect(&Token::RParen)?;
                     Expression::Serial
+                }
+
+                Some(Token::Identifier(id)) => {
+                    let var_name = id.clone();
+                    self.advance();
+                    Expression::Variable(var_name)
                 }
 
                 other => return Err(format!("Unexpected token in expression: {:?}", other)),

@@ -82,6 +82,18 @@ impl Interpreter {
                         self.transformed_data.push(new_record);
                     }
                 }
+
+                // 📌 let 변수 = 표현식;
+                Command::Let(name, expr) => {
+                    let value = evaluate_expression(&expr, &IndexMap::new(), &mut eval_state)?;
+                    eval_state.define_variable(name, value, true)?; // 가변 변수
+                }
+
+                // 📌 const 상수 = 표현식;
+                Command::Const(name, expr) => {
+                    let value = evaluate_expression(&expr, &IndexMap::new(), &mut eval_state)?;
+                    eval_state.define_variable(name, value, false)?; // 불변 상수
+                }
             }
         }
 
